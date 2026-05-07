@@ -1,5 +1,7 @@
 # scry
 
+[![CI](https://github.com/manz/scry/actions/workflows/ci.yml/badge.svg)](https://github.com/manz/scry/actions/workflows/ci.yml)
+
 Peer into code health. A small CLI that drives a local **SonarQube**
 instance for analyses and reads results from either SonarQube or
 **SonarCloud** — issues, duplications, coverage, the lot — without

@@ -5,13 +5,15 @@ from __future__ import annotations
 import argparse
 import getpass
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from scry import config as cfg
 from scry.backends import for_profile
 from scry.backends.base import Backend
 from scry.render import console, render_duplications, render_issues, render_measures
+
+CommandHandler = Callable[[argparse.Namespace], int]
 
 DEFAULT_METRICS = [
     "ncloc",
@@ -27,7 +29,7 @@ _KEY_REQUIRED_MSG = "[red]project key required (argv or sonar-project.properties
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
-    handler: callable = args.func  # type: ignore[assignment]
+    handler: CommandHandler = args.func
     return int(handler(args))
 
 
@@ -79,24 +81,29 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_url(args: argparse.Namespace, name: str, existing: cfg.Profile | None) -> str | None:
-    return args.url or _prompt(f"Host URL for '{name}'", existing.host_url_str if existing else "")
+def _resolve_url(args: argparse.Namespace, name: str, existing: cfg.Profile | None) -> str:
+    url: str | None = args.url
+    if url:
+        return url
+    default = existing.host_url_str if existing else ""
+    return _prompt(f"Host URL for '{name}'", default)
 
 
-def _resolve_token(args: argparse.Namespace, name: str, existing: cfg.Profile | None) -> str | None:
+def _resolve_token(args: argparse.Namespace, name: str, existing: cfg.Profile | None) -> str:
     if args.token is not None:
-        return args.token
+        return str(args.token)
     suffix = "keep existing, blank to reuse" if existing else "required"
     answer = getpass.getpass(f"Token for '{name}' [{suffix}]: ")
-    return answer or (existing.token if existing else None)
+    return answer or (existing.token if existing else "")
 
 
 def _resolve_organization(args: argparse.Namespace, existing: cfg.Profile | None) -> str | None:
     if args.organization is not None:
-        return args.organization
+        return str(args.organization)
     if not args.cloud:
         return None
-    return _prompt("Organization", existing.organization if existing else "") or None
+    default = existing.organization if existing and existing.organization else ""
+    return _prompt("Organization", default) or None
 
 
 def cmd_configure(args: argparse.Namespace) -> int:
@@ -199,7 +206,8 @@ def _backend(args: argparse.Namespace) -> Backend:
     backend = for_profile(profile)
     # Stamp marker on SonarQube only — SonarCloud would refuse.
     if profile.kind == "sonarqube":
-        backend.__class__ = type(backend.__class__.__name__, (backend.__class__, _AnalysisCapable), {})  # type: ignore[assignment]
+        marked = type(backend.__class__.__name__, (backend.__class__, _AnalysisCapable), {})
+        backend.__class__ = marked
     return backend
 
 
