@@ -58,8 +58,8 @@ def test_paginate_stops_on_empty_page(client: SonarClient) -> None:
 @respx.mock
 def test_post_sends_form_data(client: SonarClient) -> None:
     route = respx.post("http://sonar.test/api/projects/create").mock(return_value=Response(200, json={}))
-    client.post("/api/projects/create", project="manz_a816", name="a816")
+    client.post("/api/projects/create", project="manz_demo", name="demo")
     assert route.called
     request_body = route.calls.last.request.content.decode()
-    assert "project=manz_a816" in request_body
-    assert "name=a816" in request_body
+    assert "project=manz_demo" in request_body
+    assert "name=demo" in request_body

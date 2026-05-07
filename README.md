@@ -5,11 +5,6 @@ instance for analyses and reads results from either SonarQube or
 **SonarCloud** — issues, duplications, coverage, the lot — without
 leaving the terminal.
 
-Born out of `tools/sonar-scan` in [a816][a816]: a bash prototype that
-outgrew bash. This is the proper Python version.
-
-[a816]: https://github.com/manz/a816
-
 ## What it does
 
 - `scry configure` — first-run setup; saves host + token to
@@ -56,7 +51,4 @@ organization = "manz"
 
 ## Status
 
-Alpha. API may change. The bash prototype this replaces lives in
-[a816's `tools/sonar-scan`][bash] and stays useful until this hits 0.2.
-
-[bash]: https://github.com/manz/a816/blob/master/tools/sonar-scan
+Alpha. API may change.

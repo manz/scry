@@ -25,7 +25,7 @@ def test_issues_decodes_minimum_fields(profile: Profile) -> None:
                     {
                         "severity": "CRITICAL",
                         "rule": "python:S3776",
-                        "component": "manz_a816:a816/parse/parser_states.py",
+                        "component": "manz_demo:src/demo/parser.py",
                         "line": 328,
                         "message": "Refactor this function to reduce its Cognitive Complexity\nwith more detail.",
                     },
@@ -35,11 +35,11 @@ def test_issues_decodes_minimum_fields(profile: Profile) -> None:
         )
     )
     with SonarQubeBackend(profile) as backend:
-        issues = list(backend.issues("manz_a816"))
+        issues = list(backend.issues("manz_demo"))
     assert len(issues) == 1
     issue = issues[0]
     assert issue.severity == "CRITICAL"
-    assert issue.component == "a816/parse/parser_states.py"
+    assert issue.component == "src/demo/parser.py"
     assert issue.line == 328
     # Multi-line messages are folded to the first line.
     assert "\n" not in issue.message
@@ -53,11 +53,11 @@ def test_duplications_emit_blocks_per_file(profile: Profile) -> None:
             json={
                 "components": [
                     {
-                        "key": "manz_a816:a816/parse/nodes.py",
+                        "key": "manz_demo:src/demo/nodes.py",
                         "measures": [{"metric": "duplicated_lines", "value": "12"}],
                     },
                     {
-                        "key": "manz_a816:a816/clean.py",
+                        "key": "manz_demo:src/demo/clean.py",
                         "measures": [{"metric": "duplicated_lines", "value": "0"}],
                     },
                 ],
@@ -77,12 +77,12 @@ def test_duplications_emit_blocks_per_file(profile: Profile) -> None:
                         ]
                     }
                 ],
-                "files": {"1": {"key": "manz_a816:a816/parse/nodes.py"}},
+                "files": {"1": {"key": "manz_demo:src/demo/nodes.py"}},
             },
         )
     )
     with SonarQubeBackend(profile) as backend:
-        groups = list(backend.duplications("manz_a816"))
+        groups = list(backend.duplications("manz_demo"))
     assert len(groups) == 1
     block_a, block_b = groups[0]
     assert block_a.component.endswith("nodes.py")
@@ -106,7 +106,7 @@ def test_measures_returns_metrics(profile: Profile) -> None:
         )
     )
     with SonarQubeBackend(profile) as backend:
-        result = backend.measures("manz_a816", ["ncloc", "coverage"])
+        result = backend.measures("manz_demo", ["ncloc", "coverage"])
     assert {m.metric: m.value for m in result} == {"ncloc": "5000", "coverage": None}
 
 
@@ -120,12 +120,12 @@ def test_ensure_project_skips_when_present(profile: Profile) -> None:
     search = respx.get("http://sonar.test/api/projects/search").mock(
         return_value=Response(
             200,
-            json={"components": [{"key": "manz_a816"}], "paging": {"total": 1}},
+            json={"components": [{"key": "manz_demo"}], "paging": {"total": 1}},
         )
     )
     create = respx.post("http://sonar.test/api/projects/create").mock(return_value=Response(200, json={}))
     with SonarQubeBackend(profile) as backend:
-        backend.ensure_project("manz_a816")
+        backend.ensure_project("manz_demo")
     assert search.called
     assert not create.called
 
@@ -137,7 +137,7 @@ def test_ensure_project_creates_when_missing(profile: Profile) -> None:
     )
     create = respx.post("http://sonar.test/api/projects/create").mock(return_value=Response(200, json={}))
     with SonarQubeBackend(profile) as backend:
-        backend.ensure_project("manz_a816")
+        backend.ensure_project("manz_demo")
     assert create.called
 
 
@@ -150,7 +150,7 @@ def test_ensure_project_wraps_permission_error(profile: Profile) -> None:
         return_value=Response(403, json={"errors": [{"msg": "Insufficient privileges"}]})
     )
     with SonarQubeBackend(profile) as backend, pytest.raises(SonarApiError) as excinfo:
-        backend.ensure_project("manz_a816")
+        backend.ensure_project("manz_demo")
     assert "Create Projects" in str(excinfo.value)
 
 
@@ -165,11 +165,11 @@ def test_sonarcloud_attaches_organization_on_read(cloud_profile: Profile) -> Non
         return_value=Response(200, json={"issues": [], "paging": {"total": 0}})
     )
     with SonarCloudBackend(cloud_profile) as backend:
-        list(backend.issues("manz_a816"))
+        list(backend.issues("manz_demo"))
     assert route.called
     request = route.calls.last.request
     assert request.url.params.get("organization") == "manz"
-    assert request.url.params.get("componentKeys") == "manz_a816"
+    assert request.url.params.get("componentKeys") == "manz_demo"
 
 
 def test_sonarcloud_refuses_create(cloud_profile: Profile) -> None:

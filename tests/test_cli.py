@@ -143,7 +143,7 @@ def test_issues_renders_severities(configured: Path, capsys: pytest.CaptureFixtu
                     {
                         "severity": "MAJOR",
                         "rule": "python:S1172",
-                        "component": "manz_a816:a816/foo.py",
+                        "component": "manz_demo:src/demo/foo.py",
                         "line": 10,
                         "message": 'Remove the unused parameter "ctx".',
                     },
@@ -152,7 +152,7 @@ def test_issues_renders_severities(configured: Path, capsys: pytest.CaptureFixtu
             },
         )
     )
-    rc = cli.main(["issues", "manz_a816"])
+    rc = cli.main(["issues", "manz_demo"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "MAJOR" in out
@@ -164,7 +164,7 @@ def test_duplications_quiet_when_none(configured: Path, capsys: pytest.CaptureFi
     respx.get("http://sonar.test/api/measures/component_tree").mock(
         return_value=Response(200, json={"components": [], "paging": {"total": 0}})
     )
-    rc = cli.main(["dup", "manz_a816"])
+    rc = cli.main(["dup", "manz_demo"])
     assert rc == 0
     assert "no duplications" in capsys.readouterr().out
 
@@ -184,7 +184,7 @@ def test_measures_default_metrics(configured: Path, capsys: pytest.CaptureFixtur
             },
         )
     )
-    rc = cli.main(["measures", "manz_a816"])
+    rc = cli.main(["measures", "manz_demo"])
     assert rc == 0
     request = route.calls.last.request
     metrics_param = request.url.params["metricKeys"]
