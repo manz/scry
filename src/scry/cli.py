@@ -21,6 +21,8 @@ DEFAULT_METRICS = [
     "violations",
 ]
 
+_KEY_REQUIRED_MSG = "[red]project key required (argv or sonar-project.properties)[/]"
+
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
@@ -77,36 +79,46 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_url(args: argparse.Namespace, name: str, existing: cfg.Profile | None) -> str | None:
+    return args.url or _prompt(f"Host URL for '{name}'", existing.host_url_str if existing else "")
+
+
+def _resolve_token(args: argparse.Namespace, name: str, existing: cfg.Profile | None) -> str | None:
+    if args.token is not None:
+        return args.token
+    suffix = "keep existing, blank to reuse" if existing else "required"
+    answer = getpass.getpass(f"Token for '{name}' [{suffix}]: ")
+    return answer or (existing.token if existing else None)
+
+
+def _resolve_organization(args: argparse.Namespace, existing: cfg.Profile | None) -> str | None:
+    if args.organization is not None:
+        return args.organization
+    if not args.cloud:
+        return None
+    return _prompt("Organization", existing.organization if existing else "") or None
+
+
 def cmd_configure(args: argparse.Namespace) -> int:
     config = cfg.load()
     name = args.profile
     existing = config.profiles.get(name)
 
-    host = args.url or _prompt(f"Host URL for '{name}'", existing.host_url_str if existing else "")
+    host = _resolve_url(args, name, existing)
     if not host:
         console.print("[red]host URL required[/]")
         return 2
-
-    if args.token is not None:
-        token = args.token
-    else:
-        token = getpass.getpass(f"Token for '{name}' [{'keep existing, blank to reuse' if existing else 'required'}]: ")
-        token = token or (existing.token if existing else "")
+    token = _resolve_token(args, name, existing)
     if not token:
         console.print("[red]token required[/]")
         return 2
-
-    kind = "sonarcloud" if args.cloud else "sonarqube"
-    organization: str | None = args.organization
-    if args.cloud and organization is None:
-        organization = _prompt("Organization", existing.organization if existing else "") or None
 
     config.profiles[name] = cfg.Profile(
         name=name,
         host_url=host,  # type: ignore[arg-type]
         token=token,
-        organization=organization,
-        kind=kind,  # type: ignore[arg-type]
+        organization=_resolve_organization(args, existing),
+        kind="sonarcloud" if args.cloud else "sonarqube",
     )
     if not config.default_profile or config.default_profile not in config.profiles:
         config.default_profile = name
@@ -132,7 +144,7 @@ def cmd_status(args: argparse.Namespace) -> int:
 def cmd_analyse(args: argparse.Namespace) -> int:
     key = _resolve_key(args.key)
     if key is None:
-        console.print("[red]project key required (argv or sonar-project.properties)[/]")
+        console.print(_KEY_REQUIRED_MSG)
         return 2
     with _backend(args) as backend:
         if not isinstance(backend, _AnalysisCapable):
@@ -145,7 +157,7 @@ def cmd_analyse(args: argparse.Namespace) -> int:
 def cmd_issues(args: argparse.Namespace) -> int:
     key = _resolve_key(args.key)
     if key is None:
-        console.print("[red]project key required[/]")
+        console.print(_KEY_REQUIRED_MSG)
         return 2
     with _backend(args) as backend:
         render_issues(backend.issues(key))
@@ -155,7 +167,7 @@ def cmd_issues(args: argparse.Namespace) -> int:
 def cmd_duplications(args: argparse.Namespace) -> int:
     key = _resolve_key(args.key)
     if key is None:
-        console.print("[red]project key required[/]")
+        console.print(_KEY_REQUIRED_MSG)
         return 2
     with _backend(args) as backend:
         render_duplications(backend.duplications(key))
@@ -165,7 +177,7 @@ def cmd_duplications(args: argparse.Namespace) -> int:
 def cmd_measures(args: argparse.Namespace) -> int:
     key = _resolve_key(args.key)
     if key is None:
-        console.print("[red]project key required[/]")
+        console.print(_KEY_REQUIRED_MSG)
         return 2
     with _backend(args) as backend:
         render_measures(backend.measures(key, args.metrics))
