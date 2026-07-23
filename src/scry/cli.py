@@ -68,8 +68,9 @@ def _build_parser() -> argparse.ArgumentParser:
         "-m",
         "--metrics",
         nargs="+",
-        default=DEFAULT_METRICS,
-        help=f"Metric keys to fetch (default: {' '.join(DEFAULT_METRICS)}).",
+        action="extend",
+        default=None,
+        help=f"Metric keys to fetch, repeatable (default: {' '.join(DEFAULT_METRICS)}).",
     )
     meas.set_defaults(func=cmd_measures)
 
@@ -187,7 +188,7 @@ def cmd_measures(args: argparse.Namespace) -> int:
         console.print(_KEY_REQUIRED_MSG)
         return 2
     with _backend(args) as backend:
-        render_measures(backend.measures(key, args.metrics))
+        render_measures(backend.measures(key, args.metrics or DEFAULT_METRICS))
     return 0
 
 
