@@ -195,6 +195,18 @@ def test_measures_default_metrics(configured: Path, capsys: pytest.CaptureFixtur
     assert "84" in out
 
 
+@respx.mock
+def test_measures_repeated_m_flags_accumulate(configured: Path) -> None:
+    route = respx.get("http://sonar.test/api/measures/component").mock(
+        return_value=Response(200, json={"component": {"measures": []}})
+    )
+    rc = cli.main(["measures", "manz_demo", "-m", "bugs", "-m", "vulnerabilities", "-m", "coverage"])
+    assert rc == 0
+    metrics_param = route.calls.last.request.url.params["metricKeys"]
+    # Every -m must survive, not just the last one.
+    assert set(metrics_param.split(",")) == {"bugs", "vulnerabilities", "coverage"}
+
+
 def test_missing_key_returns_two(configured: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)  # no sonar-project.properties here
     assert cli.main(["issues"]) == 2
