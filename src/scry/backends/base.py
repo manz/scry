@@ -81,12 +81,16 @@ class Backend:
     # project-aware reads (overridden in SonarCloud to add org)
     # --------------------------------------------------------------
 
-    def issues(self, project_key: str) -> Iterable[Issue]:
+    def issues(self, project_key: str, pull_request: str | None = None) -> Iterable[Issue]:
+        # ``pullRequest`` scopes the search to a PR's new-code analysis; omit it
+        # entirely for the main-branch view (the API rejects an empty value).
+        extra: dict[str, Any] = {"pullRequest": pull_request} if pull_request else {}
         for raw in self.client.paginate(
             "/api/issues/search",
             items_key="issues",
             componentKeys=project_key,
             resolved="false",
+            **extra,
         ):
             yield Issue.from_api(raw)
 
