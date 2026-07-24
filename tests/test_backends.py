@@ -172,6 +172,26 @@ def test_sonarcloud_attaches_organization_on_read(cloud_profile: Profile) -> Non
     assert request.url.params.get("componentKeys") == "manz_demo"
 
 
+@respx.mock
+def test_issues_scopes_to_pull_request(cloud_profile: Profile) -> None:
+    route = respx.get("https://sonarcloud.io/api/issues/search").mock(
+        return_value=Response(200, json={"issues": [], "paging": {"total": 0}})
+    )
+    with SonarCloudBackend(cloud_profile) as backend:
+        list(backend.issues("manz_demo", pull_request="716"))
+    assert route.calls.last.request.url.params.get("pullRequest") == "716"
+
+
+@respx.mock
+def test_issues_omits_pull_request_when_none(cloud_profile: Profile) -> None:
+    route = respx.get("https://sonarcloud.io/api/issues/search").mock(
+        return_value=Response(200, json={"issues": [], "paging": {"total": 0}})
+    )
+    with SonarCloudBackend(cloud_profile) as backend:
+        list(backend.issues("manz_demo"))
+    assert "pullRequest" not in route.calls.last.request.url.params
+
+
 def test_sonarcloud_refuses_create(cloud_profile: Profile) -> None:
     backend = SonarCloudBackend(cloud_profile)
     try:
