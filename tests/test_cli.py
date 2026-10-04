@@ -233,6 +233,15 @@ def test_missing_key_returns_two(configured: Path, tmp_path: Path, monkeypatch: 
 
 
 @respx.mock
+def test_issues_pr_flag_reaches_pull_request(configured: Path) -> None:
+    route = respx.get("http://sonar.test/api/issues/search").mock(
+        return_value=Response(200, json={"issues": [], "paging": {"total": 0}})
+    )
+    assert cli.main(["issues", "manz_demo", "--pr", "716"]) == 0
+    assert route.calls.last.request.url.params.get("pullRequest") == "716"
+
+
+@respx.mock
 def test_issues_reports_unknown_organization(configured_cloud: Path, capsys: pytest.CaptureFixture[str]) -> None:
     respx.get("https://sonarcloud.io/api/components/show").mock(return_value=Response(200, json={"component": {}}))
     assert cli.main(["issues", "manz_demo"]) == 2

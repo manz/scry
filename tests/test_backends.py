@@ -228,12 +228,24 @@ def test_sonarcloud_measures_use_the_project_organization(cloud_profile: Profile
 @respx.mock
 def test_sonarcloud_duplications_use_the_project_organization(cloud_profile: Profile) -> None:
     _mock_project_org("other")
-    route = respx.get("https://sonarcloud.io/api/measures/component_tree").mock(
-        return_value=Response(200, json={"components": [], "paging": {"total": 0}})
+    tree = respx.get("https://sonarcloud.io/api/measures/component_tree").mock(
+        return_value=Response(
+            200,
+            json={
+                "components": [
+                    {"key": "manz_demo:src/demo/nodes.py", "measures": [{"metric": "duplicated_lines", "value": "24"}]}
+                ],
+                "paging": {"total": 1},
+            },
+        )
+    )
+    show = respx.get("https://sonarcloud.io/api/duplications/show").mock(
+        return_value=Response(200, json={"duplications": [], "files": {}})
     )
     with SonarCloudBackend(cloud_profile) as backend:
         list(backend.duplications("manz_demo"))
-    assert route.calls.last.request.url.params.get("organization") == "other"
+    assert tree.calls.last.request.url.params.get("organization") == "other"
+    assert show.calls.last.request.url.params.get("organization") == "other"
 
 
 @respx.mock
