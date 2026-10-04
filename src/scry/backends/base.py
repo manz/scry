@@ -78,8 +78,12 @@ class Backend:
         return bool(payload.get("valid"))
 
     # --------------------------------------------------------------
-    # project-aware reads (overridden in SonarCloud to add org)
+    # project-aware reads (SonarCloud scopes them to the project's org)
     # --------------------------------------------------------------
+
+    def project_params(self, project_key: str) -> dict[str, Any]:
+        """Extra query params every read about ``project_key`` must carry."""
+        return {}
 
     def issues(self, project_key: str, pull_request: str | None = None) -> Iterable[Issue]:
         # ``pullRequest`` scopes the search to a PR's new-code analysis; omit it
@@ -91,21 +95,24 @@ class Backend:
             componentKeys=project_key,
             resolved="false",
             **extra,
+            **self.project_params(project_key),
         ):
             yield Issue.from_api(raw)
 
     def duplications(self, project_key: str) -> Iterable[list[DuplicationBlock]]:
+        scope = self.project_params(project_key)
         files = self.client.paginate(
             "/api/measures/component_tree",
             items_key="components",
             component=project_key,
             metricKeys="duplicated_lines",
             qualifiers="FIL",
+            **scope,
         )
         for component in files:
             if not _has_duplications(component):
                 continue
-            payload = self.client.get("/api/duplications/show", key=component["key"])
+            payload = self.client.get("/api/duplications/show", key=component["key"], **scope)
             file_index = payload.get("files", {}) or {}
             for dup in payload.get("duplications", []) or []:
                 yield [
@@ -122,6 +129,7 @@ class Backend:
             "/api/measures/component",
             component=project_key,
             metricKeys=",".join(metrics),
+            **self.project_params(project_key),
         )
         return [Measure.model_validate(m) for m in payload.get("component", {}).get("measures", []) or []]
 
