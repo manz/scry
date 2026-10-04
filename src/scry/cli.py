@@ -8,9 +8,12 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
+from rich.markup import escape
+
 from scry import config as cfg
 from scry.backends import for_profile
 from scry.backends.base import Backend
+from scry.client import ScryError
 from scry.render import console, render_duplications, render_issues, render_measures
 
 CommandHandler = Callable[[argparse.Namespace], int]
@@ -30,7 +33,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     handler: CommandHandler = args.func
-    return int(handler(args))
+    try:
+        return int(handler(args))
+    except ScryError as exc:
+        console.print(f"[red]error: {escape(str(exc))}[/]")
+        return 2
 
 
 def _build_parser() -> argparse.ArgumentParser:

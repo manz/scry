@@ -15,7 +15,11 @@ import httpx
 from scry.config import Profile
 
 
-class SonarApiError(RuntimeError):
+class ScryError(RuntimeError):
+    """A failure the CLI reports as a one-line message instead of a traceback."""
+
+
+class SonarApiError(ScryError):
     """Raised when the server returns a non-2xx response we can't paper over."""
 
     def __init__(self, status: int, message: str) -> None:

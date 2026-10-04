@@ -7,7 +7,7 @@ import respx
 from httpx import Response
 
 from scry.backends import SonarCloudBackend, SonarQubeBackend
-from scry.client import SonarApiError
+from scry.client import ScryError, SonarApiError
 from scry.config import Profile
 
 # ---------------------------------------------------------------------------
@@ -228,12 +228,24 @@ def test_sonarcloud_measures_use_the_project_organization(cloud_profile: Profile
 @respx.mock
 def test_sonarcloud_duplications_use_the_project_organization(cloud_profile: Profile) -> None:
     _mock_project_org("other")
-    route = respx.get("https://sonarcloud.io/api/measures/component_tree").mock(
-        return_value=Response(200, json={"components": [], "paging": {"total": 0}})
+    tree = respx.get("https://sonarcloud.io/api/measures/component_tree").mock(
+        return_value=Response(
+            200,
+            json={
+                "components": [
+                    {"key": "manz_demo:src/demo/nodes.py", "measures": [{"metric": "duplicated_lines", "value": "24"}]}
+                ],
+                "paging": {"total": 1},
+            },
+        )
+    )
+    show = respx.get("https://sonarcloud.io/api/duplications/show").mock(
+        return_value=Response(200, json={"duplications": [], "files": {}})
     )
     with SonarCloudBackend(cloud_profile) as backend:
         list(backend.duplications("manz_demo"))
-    assert route.calls.last.request.url.params.get("organization") == "other"
+    assert tree.calls.last.request.url.params.get("organization") == "other"
+    assert show.calls.last.request.url.params.get("organization") == "other"
 
 
 @respx.mock
@@ -249,14 +261,38 @@ def test_sonarcloud_looks_up_the_project_organization_once(cloud_profile: Profil
 
 
 @respx.mock
-def test_sonarcloud_falls_back_to_profile_organization(cloud_profile: Profile) -> None:
+def test_sonarcloud_raises_when_project_organization_unknown(cloud_profile: Profile) -> None:
     respx.get("https://sonarcloud.io/api/components/show").mock(return_value=Response(200, json={"component": {}}))
-    route = respx.get("https://sonarcloud.io/api/issues/search").mock(
+    with (
+        SonarCloudBackend(cloud_profile) as backend,
+        pytest.raises(ScryError, match="organization of project 'manz_demo'"),
+    ):
+        list(backend.issues("manz_demo"))
+
+
+@respx.mock
+def test_sonarcloud_lookup_sends_profile_organization(cloud_profile: Profile) -> None:
+    lookup = _mock_project_org("other")
+    respx.get("https://sonarcloud.io/api/issues/search").mock(
         return_value=Response(200, json={"issues": [], "paging": {"total": 0}})
     )
     with SonarCloudBackend(cloud_profile) as backend:
         list(backend.issues("manz_demo"))
-    assert route.calls.last.request.url.params.get("organization") == "manz"
+    assert lookup.calls.last.request.url.params.get("organization") == "manz"
+
+
+@respx.mock
+def test_sonarcloud_status_carries_no_organization(cloud_profile: Profile) -> None:
+    route = respx.get("https://sonarcloud.io/api/system/status").mock(return_value=Response(200, json={"status": "UP"}))
+    with SonarCloudBackend(cloud_profile) as backend:
+        backend.system_status()
+    assert "organization" not in route.calls.last.request.url.params
+
+
+def test_sonarcloud_requires_profile_organization(cloud_profile: Profile) -> None:
+    profile = cloud_profile.model_copy(update={"organization": None})
+    with SonarCloudBackend(profile) as backend, pytest.raises(ScryError, match="no organization set"):
+        backend.project_params("manz_demo")
 
 
 def test_sonarcloud_refuses_create(cloud_profile: Profile) -> None:

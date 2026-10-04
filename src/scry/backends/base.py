@@ -7,7 +7,7 @@ without leaking those differences into the CLI layer.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any
+from typing import Any, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -49,6 +49,12 @@ class Measure(BaseModel):
     value: str | None = None
 
 
+class ProjectParams(TypedDict, total=False):
+    """Query params scoping a read to one project (e.g. SonarCloud's org)."""
+
+    organization: str
+
+
 class Backend:
     """Base class — concrete backends override what they need."""
 
@@ -81,20 +87,17 @@ class Backend:
     # project-aware reads (SonarCloud scopes them to the project's org)
     # --------------------------------------------------------------
 
-    def project_params(self, project_key: str) -> dict[str, Any]:
+    def project_params(self, project_key: str) -> ProjectParams:
         """Extra query params every read about ``project_key`` must carry."""
         return {}
 
     def issues(self, project_key: str, pull_request: str | None = None) -> Iterable[Issue]:
-        # ``pullRequest`` scopes the search to a PR's new-code analysis; omit it
-        # entirely for the main-branch view (the API rejects an empty value).
-        extra: dict[str, Any] = {"pullRequest": pull_request} if pull_request else {}
         for raw in self.client.paginate(
             "/api/issues/search",
             items_key="issues",
             componentKeys=project_key,
             resolved="false",
-            **extra,
+            pullRequest=pull_request,
             **self.project_params(project_key),
         ):
             yield Issue.from_api(raw)
