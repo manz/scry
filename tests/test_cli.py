@@ -210,3 +210,12 @@ def test_measures_repeated_m_flags_accumulate(configured: Path) -> None:
 def test_missing_key_returns_two(configured: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)  # no sonar-project.properties here
     assert cli.main(["issues"]) == 2
+
+
+@respx.mock
+def test_issues_reports_api_error(configured: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    respx.get("http://sonar.test/api/issues/search").mock(
+        return_value=Response(404, json={"errors": [{"msg": "Component key 'nope' not found"}]})
+    )
+    assert cli.main(["issues", "nope"]) == 2
+    assert "not found" in capsys.readouterr().out
