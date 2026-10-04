@@ -10,26 +10,23 @@ from __future__ import annotations
 from typing import NoReturn
 
 from scry.backends.base import Backend, ProjectParams
+from scry.client import ScryError
+from scry.config import Profile
 
 
 class SonarCloudBackend(Backend):
-    """Hosted SonarCloud. Adds the `organization` query param to every read."""
+    """Hosted SonarCloud. Scopes project reads to the project's organization."""
+
+    def __init__(self, profile: Profile) -> None:
+        super().__init__(profile)
+        self._project_orgs: dict[str, str] = {}
 
     @property
     def organization(self) -> str:
         org = self.profile.organization
         if not org:
-            raise ValueError(f"profile '{self.profile.name}' targets SonarCloud but has no organization set")
+            raise ScryError(f"profile '{self.profile.name}' targets SonarCloud but has no organization set")
         return org
-
-    # All read methods ride on the base implementation; we add `organization`
-    # by patching the underlying httpx client's default params.
-    def __init__(self, profile) -> None:  # type: ignore[no-untyped-def]
-        super().__init__(profile)
-        # SonarCloud accepts an `organization` query string on most endpoints;
-        # send it on every request via httpx's default params.
-        self.client._http.params = self.client._http.params.set("organization", self.organization)
-        self._project_orgs: dict[str, str] = {}
 
     def project_params(self, project_key: str) -> ProjectParams:
         """Scope reads to the organization that owns ``project_key``.
@@ -40,10 +37,15 @@ class SonarCloudBackend(Backend):
         living in another org the token can read.
         """
         if project_key not in self._project_orgs:
-            payload = self.client.get("/api/components/show", component=project_key)
-            owner = payload.get("component", {}).get("organization")
-            self._project_orgs[project_key] = str(owner) if owner else self.organization
+            self._project_orgs[project_key] = self._lookup_organization(project_key)
         return {"organization": self._project_orgs[project_key]}
+
+    def _lookup_organization(self, project_key: str) -> str:
+        payload = self.client.get("/api/components/show", component=project_key, organization=self.organization)
+        owner = payload.get("component", {}).get("organization")
+        if not owner:
+            raise ScryError(f"couldn't determine the SonarCloud organization of project '{project_key}'")
+        return str(owner)
 
     # Refuse anything that would mutate the cloud project.
     def create_project(self, *_: object, **__: object) -> NoReturn:

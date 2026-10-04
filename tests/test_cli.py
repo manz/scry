@@ -106,6 +106,26 @@ def test_configure_cloud_requires_organization(xdg_config_home: Path) -> None:
     assert cfg.profile("cloud").organization == "manz"
 
 
+@pytest.fixture
+def configured_cloud(xdg_config_home: Path) -> Path:
+    """Write a `cloud` SonarCloud profile as the default."""
+    cfg = config.Config(
+        default_profile="cloud",
+        profiles={
+            "cloud": config.Profile.model_validate(
+                {
+                    "name": "cloud",
+                    "host_url": "https://sonarcloud.io",
+                    "token": "cloud_tok",
+                    "organization": "manz",
+                    "kind": "sonarcloud",
+                }
+            ),
+        },
+    )
+    return config.save(cfg)
+
+
 # ---------------------------------------------------------------------------
 # status / issues / duplications / measures (mocked HTTP)
 # ---------------------------------------------------------------------------
@@ -210,6 +230,13 @@ def test_measures_repeated_m_flags_accumulate(configured: Path) -> None:
 def test_missing_key_returns_two(configured: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(tmp_path)  # no sonar-project.properties here
     assert cli.main(["issues"]) == 2
+
+
+@respx.mock
+def test_issues_reports_unknown_organization(configured_cloud: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    respx.get("https://sonarcloud.io/api/components/show").mock(return_value=Response(200, json={"component": {}}))
+    assert cli.main(["issues", "manz_demo"]) == 2
+    assert "couldn't determine the SonarCloud organization" in capsys.readouterr().out
 
 
 @respx.mock
