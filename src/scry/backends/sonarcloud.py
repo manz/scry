@@ -7,7 +7,7 @@ profile can't accidentally hit production.
 
 from __future__ import annotations
 
-from typing import NoReturn
+from typing import Any, NoReturn
 
 from scry.backends.base import Backend
 
@@ -29,6 +29,21 @@ class SonarCloudBackend(Backend):
         # SonarCloud accepts an `organization` query string on most endpoints;
         # send it on every request via httpx's default params.
         self.client._http.params = self.client._http.params.set("organization", self.organization)
+        self._project_orgs: dict[str, str] = {}
+
+    def project_params(self, project_key: str) -> dict[str, Any]:
+        """Scope reads to the organization that owns ``project_key``.
+
+        SonarCloud answers a query for a project outside the requested
+        organization with an empty 200, not an error, so trusting the
+        profile's organization silently reports "no issues" for any project
+        living in another org the token can read.
+        """
+        if project_key not in self._project_orgs:
+            payload = self.client.get("/api/components/show", component=project_key)
+            owner = payload.get("component", {}).get("organization")
+            self._project_orgs[project_key] = str(owner) if owner else self.organization
+        return {"organization": self._project_orgs[project_key]}
 
     # Refuse anything that would mutate the cloud project.
     def create_project(self, *_: object, **__: object) -> NoReturn:

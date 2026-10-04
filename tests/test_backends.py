@@ -159,8 +159,15 @@ def test_ensure_project_wraps_permission_error(profile: Profile) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _mock_project_org(organization: str) -> respx.Route:
+    return respx.get("https://sonarcloud.io/api/components/show").mock(
+        return_value=Response(200, json={"component": {"key": "manz_demo", "organization": organization}})
+    )
+
+
 @respx.mock
 def test_sonarcloud_attaches_organization_on_read(cloud_profile: Profile) -> None:
+    _mock_project_org("manz")
     route = respx.get("https://sonarcloud.io/api/issues/search").mock(
         return_value=Response(200, json={"issues": [], "paging": {"total": 0}})
     )
@@ -170,6 +177,86 @@ def test_sonarcloud_attaches_organization_on_read(cloud_profile: Profile) -> Non
     request = route.calls.last.request
     assert request.url.params.get("organization") == "manz"
     assert request.url.params.get("componentKeys") == "manz_demo"
+
+
+@respx.mock
+def test_issues_scopes_to_pull_request(cloud_profile: Profile) -> None:
+    _mock_project_org("manz")
+    route = respx.get("https://sonarcloud.io/api/issues/search").mock(
+        return_value=Response(200, json={"issues": [], "paging": {"total": 0}})
+    )
+    with SonarCloudBackend(cloud_profile) as backend:
+        list(backend.issues("manz_demo", pull_request="716"))
+    assert route.calls.last.request.url.params.get("pullRequest") == "716"
+
+
+@respx.mock
+def test_issues_omits_pull_request_when_none(cloud_profile: Profile) -> None:
+    _mock_project_org("manz")
+    route = respx.get("https://sonarcloud.io/api/issues/search").mock(
+        return_value=Response(200, json={"issues": [], "paging": {"total": 0}})
+    )
+    with SonarCloudBackend(cloud_profile) as backend:
+        list(backend.issues("manz_demo"))
+    assert "pullRequest" not in route.calls.last.request.url.params
+
+
+@respx.mock
+def test_sonarcloud_reads_use_the_project_organization(cloud_profile: Profile) -> None:
+    # Profile org is "manz"; the project lives in "other". SonarCloud answers
+    # an out-of-org query with an empty 200, so the profile org must not win.
+    _mock_project_org("other")
+    route = respx.get("https://sonarcloud.io/api/issues/search").mock(
+        return_value=Response(200, json={"issues": [], "paging": {"total": 0}})
+    )
+    with SonarCloudBackend(cloud_profile) as backend:
+        list(backend.issues("manz_demo"))
+    assert route.calls.last.request.url.params.get("organization") == "other"
+
+
+@respx.mock
+def test_sonarcloud_measures_use_the_project_organization(cloud_profile: Profile) -> None:
+    _mock_project_org("other")
+    route = respx.get("https://sonarcloud.io/api/measures/component").mock(
+        return_value=Response(200, json={"component": {"measures": []}})
+    )
+    with SonarCloudBackend(cloud_profile) as backend:
+        backend.measures("manz_demo", ["ncloc"])
+    assert route.calls.last.request.url.params.get("organization") == "other"
+
+
+@respx.mock
+def test_sonarcloud_duplications_use_the_project_organization(cloud_profile: Profile) -> None:
+    _mock_project_org("other")
+    route = respx.get("https://sonarcloud.io/api/measures/component_tree").mock(
+        return_value=Response(200, json={"components": [], "paging": {"total": 0}})
+    )
+    with SonarCloudBackend(cloud_profile) as backend:
+        list(backend.duplications("manz_demo"))
+    assert route.calls.last.request.url.params.get("organization") == "other"
+
+
+@respx.mock
+def test_sonarcloud_looks_up_the_project_organization_once(cloud_profile: Profile) -> None:
+    lookup = _mock_project_org("other")
+    respx.get("https://sonarcloud.io/api/issues/search").mock(
+        return_value=Response(200, json={"issues": [], "paging": {"total": 0}})
+    )
+    with SonarCloudBackend(cloud_profile) as backend:
+        list(backend.issues("manz_demo"))
+        list(backend.issues("manz_demo"))
+    assert lookup.call_count == 1
+
+
+@respx.mock
+def test_sonarcloud_falls_back_to_profile_organization(cloud_profile: Profile) -> None:
+    respx.get("https://sonarcloud.io/api/components/show").mock(return_value=Response(200, json={"component": {}}))
+    route = respx.get("https://sonarcloud.io/api/issues/search").mock(
+        return_value=Response(200, json={"issues": [], "paging": {"total": 0}})
+    )
+    with SonarCloudBackend(cloud_profile) as backend:
+        list(backend.issues("manz_demo"))
+    assert route.calls.last.request.url.params.get("organization") == "manz"
 
 
 def test_sonarcloud_refuses_create(cloud_profile: Profile) -> None:

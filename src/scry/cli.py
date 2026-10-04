@@ -56,6 +56,13 @@ def _build_parser() -> argparse.ArgumentParser:
 
     iss = sub.add_parser("issues", help="List open issues for a project.")
     iss.add_argument("key", nargs="?")
+    iss.add_argument(
+        "--pr",
+        "--pull-request",
+        dest="pull_request",
+        metavar="PR",
+        help="Scope to a pull request's new-code analysis (SonarCloud PR decoration).",
+    )
     iss.set_defaults(func=cmd_issues)
 
     dup = sub.add_parser("duplications", aliases=["dup"], help="List duplication blocks.")
@@ -167,7 +174,7 @@ def cmd_issues(args: argparse.Namespace) -> int:
         console.print(_KEY_REQUIRED_MSG)
         return 2
     with _backend(args) as backend:
-        render_issues(backend.issues(key))
+        render_issues(backend.issues(key, pull_request=args.pull_request))
     return 0
 
 
