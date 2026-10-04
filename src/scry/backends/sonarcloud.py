@@ -7,9 +7,9 @@ profile can't accidentally hit production.
 
 from __future__ import annotations
 
-from typing import Any, NoReturn
+from typing import NoReturn
 
-from scry.backends.base import Backend
+from scry.backends.base import Backend, ProjectParams
 
 
 class SonarCloudBackend(Backend):
@@ -31,7 +31,7 @@ class SonarCloudBackend(Backend):
         self.client._http.params = self.client._http.params.set("organization", self.organization)
         self._project_orgs: dict[str, str] = {}
 
-    def project_params(self, project_key: str) -> dict[str, Any]:
+    def project_params(self, project_key: str) -> ProjectParams:
         """Scope reads to the organization that owns ``project_key``.
 
         SonarCloud answers a query for a project outside the requested
